@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- Corentin FAY 
+    N°22013398 -->
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script> -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script>
+        var socket = io();
+
+        window.addEventListener('load', () => { //pour lancer le jeu par etapes et eviter des bugs
+            document.querySelector('#so').disabled = true;
+            document.querySelector('#en').disabled = true;
+            document.querySelector('#pseudo').disabled = true;
+            document.querySelector('#send').disabled = true;
+            document.querySelector('#message').disabled = true;
+            document.querySelector('#BPT').disabled = true;
+        });
+
+
+
+
+        // ---------------------------------function------------------------------------------------------
+        function demanderJ() { //pour afficher les joueur dans le label
+            socket.emit('joueurs');
+        };
+
+        function entrer() { //entrer un joueur dans la partie
+            var info = document.getElementById('pseudo').value;
+            socket.emit('entree', info);
+
+        };
+
+
+        function sortie() { // la sortie
+            var info = document.getElementById('pseudo').value;
+            socket.emit('sortie', info);
+            document.querySelector('#en').disabled = false;
+            document.querySelector('#pseudo').disabled = false;
+            document.querySelector('#so').disabled = true;
+
+        };
+
+        function parametreT() { //parametre Taille du damier
+            var RadioTaille = document.querySelectorAll('input[name = "taille"]');
+            let taille;
+            for (let nbT of RadioTaille) {
+                if (nbT.checked) {
+                    taille = nbT.value;
+                    break;
+                }
+            }
+            socket.emit('constructeurT', {
+                'taille': taille
+            });
+
+
+        };
+
+        function parametreJ() { //parametre joueur
+            var RadioJoueur = document.querySelectorAll('input[name = "nbj"]');
+            let joueurs;
+            for (let nbJ of RadioJoueur) {
+                if (nbJ.checked) {
+                    joueurs = nbJ.value;
+                    break;
+                }
+            }
+            socket.emit('constructeurJ', {
+                'joueurs': joueurs
+            });
+
+            socket.emit('unlock');
+
+        };
+
+        function send() { //pour envoyer le msg
+            var msg = document.getElementById('message').value;
+            var nomJ = document.getElementById('pseudo').value;
+            socket.emit('chat message', {
+                'msg': msg,
+                'nomJ': nomJ
+            });
+        };
+        //----------------------------------------les sockets------------------------------------------------------
+        socket.on('infojouer', data => { //envoie les joueur dans le label
+            $("#NomDesJoueur").text(data);
+        });
+
+        socket.on('entree', data => { //entrer classique
+            console.log("vous est rajouter");
+            console.log(data);
+            demanderJ();
+
+
+        });
+        socket.on('entree2', data => { //si ne respect pas les conditions
+            console.log("pas de place ou deja existant");
+            console.log(data);
+            demanderJ();
+        });
+
+
+        socket.on('sortie', data => { //a la fois la sortie classique et in game
+            console.log("est sortie");
+            console.log(data);
+            socket.emit('deuxP');
+            demanderJ();
+        });
+
+
+        socket.on('taille', taille => { //generation apres le paramétrage
+            var n = parseInt(taille);
+            genereDamier(20, n, n);
+
+        });
+        socket.on('deuxBis', () => { // astuce pour desactiver le bouton sortie
+                socket.emit('deuxP');
+            })
+            //les different socket qui disable ou enable les bouttons selon les cas
+        socket.on('deuxP', () => {
+            document.querySelector('#so').disabled = true;
+        });
+        socket.on('unlock', () => {
+            document.querySelector('#en').disabled = false;
+            document.querySelector('#pseudo').disabled = false;
+        });
+
+        socket.on('allP', () => {
+            document.querySelector('#BPT').disabled = false;
+        });
+
+        socket.on('unlockentrer', () => {
+            document.querySelector('#en').disabled = true;
+            document.querySelector('#pseudo').disabled = true;
+            document.querySelector('#so').disabled = false;
+            document.querySelector('#send').disabled = false;
+            document.querySelector('#message').disabled = false;
+        });
+        socket.on('lock', () => {
+            document.querySelector('#BPT').disabled = true;
+            socket.emit('deuxP');
+        });
+        socket.on('lockJ', () => {
+            document.querySelector('#BPJ').disabled = true;
+        });
+        socket.on('kick', () => {
+                document.querySelector('#en').disabled = true;
+            })
+            //le chat : 
+        socket.on('chat message', chats => {
+            console.log('envoie des donne ' + chats)
+                // for (let i = 0; i < chats.length; i++) {
+                //     $("#chat" + i).text(chats[i]);
+                // }
+            $("#chat1").text(chats[0]);
+            $("#chat2").text(chats[1]);
+            $("#chat3").text(chats[2]);
+            $("#chat4").text(chats[3]);
+            $("#chat5").text(chats[4]);
+            $("#chat6").text(chats[5]);
+        });
+
+        socket.on('coloris', data => { //colori selon le joueur
+            console.log("le num joueur est " + data.numJ);
+            d3.select('#h' + data.id).attr('fill', data.couleur[data.numJ]);
+
+        });
+
+        //---------------------------------------------------------------Hexagone---------------------------------------------------------------------------
+        function creeHexagone(rayon) {
+            let points = new Array();
+            for (var i = 0; i < 6; ++i) {
+                var angle = i * Math.PI / 3;
+                var x = Math.sin(angle) * rayon;
+                var y = -Math.cos(angle) * rayon;
+                points.push([Math.round(x * 100) / 100, Math.round(y * 100) / 100]);
+            }
+            return points;
+        }
+        //------------------------------------------------------------Damier------------------------------------------------------------------------------------
+        function genereDamier(rayon, nbLignes, nbColonnes) {
+            distance = rayon - (Math.sin(1 * Math.PI / 3) * rayon);
+            d3.select("#tablier").append("svg").attr("width", (nbLignes * 2) * 2 * rayon).attr("height", nbLignes * 2 * rayon);
+            var hexagone = creeHexagone(rayon);
+            var i = 0;
+            for (var ligne = 0; ligne < nbLignes; ligne++) {
+                i++
+                for (var colonne = 0; colonne < nbColonnes; colonne++) {
+                    var d = "";
+                    var x, y;
+
+                    for (h in hexagone) {
+
+                        console.log(i);
+                        x = hexagone[h][0] + (rayon - distance) * (2 + i + 2 * colonne);
+                        y = distance * 2 + hexagone[h][1] + (rayon - distance * 2) * (2 + 2 * ligne);
+                        if (h == 0) d += "M" + x + "," + y + " L";
+                        else d += x + "," + y + " ";
+                    }
+                    d += "Z";
+                    d3.select("svg")
+                        .append("path")
+                        .attr("d", d).attr("stroke", "black").attr("fill", "white")
+                        .attr("id", "h" + (ligne * nbLignes + colonne))
+                        .on("click", function(d) {
+                            //gerer la couleur selon le joueur qui joue : 
+                            var nomJ = document.getElementById('pseudo').value;
+                            console.log(nomJ);
+                            let id = d3.select(this).attr('id').substring(1);
+                            socket.emit('pion', {
+                                'nomJ': nomJ,
+                                'ID': id
+                            });
+
+
+                        });
+                }
+            }
+
+
+        }
+        //-------------------------------------------------------------------------------------------------------------------------------------------------------
+    </script>
+</head>
+
+<body>
+
+
+    <p>Le nombre de joueur</p>
+    <input type="radio" name="nbj" value="2" id="dixneuf">2</input>
+    <input type="radio" name="nbj" value="3" id="quatorze">3</input>
+    <input type="radio" name="nbj" value="4" id="neuf">4</input>
+    <button onclick="parametreJ()" id="BPJ">confirmer</button>
+    <br>
+    <br>
+
+    <input type="text" placeholder="pseudo" id="pseudo">
+    <button onclick="entrer()" id="en">Entrer</button>
+    <button onclick="sortie()" id="so">Sortie</button>
+    <br>
+    <label id="NomDesJoueur"></label>
+    <br>
+    <p>La taille du damier</p>
+    <input type="radio" name="taille" value="11" id="onze">11</input>
+    <input type="radio" name="taille" value="19" id="dixneuf">19</input>
+    <input type="radio" name="taille" value="14" id="quatorze">14</input>
+    <input type="radio" name="taille" value="9" id="neuf">9</input>
+    <button onclick="parametreT()" id="BPT">confirmer</button>
+    <br>
+    <div id="tablier"></div>
+
+    <div>
+        <table>
+
+            <label id="chat1"></label>
+            <br>
+            <label id="chat2"></label>
+            <br>
+            <label id="chat3"></label>
+            <br>
+            <label id="chat4"></label>
+            <br>
+            <label id="chat5"></label>
+            <br>
+            <label id="chat6"></label>
+            <br>
+
+        </table>
+        <input type="text" id="message">
+        <button id="send" onclick="send()">Envoyer</button>
+    </div>
+</body>
+
+</html>
