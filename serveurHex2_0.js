@@ -17,7 +17,7 @@ var couleur = ['red', 'blue', 'green', 'orange'];
 
 
 app.get('/', (request, response) => {
-    response.sendFile('clientHex2_0.html', { root: __dirname });
+    response.sendFile('index.html', { root: __dirname });
 });
 
 
